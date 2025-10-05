@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>🔥 Умный Чат с WebSocket</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #auth, #chat {
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+      padding: 25px;
+      width: 400px;
+      max-width: 95%;
+      display: none;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    #auth.active, #chat.active {
+      display: flex;
+    }
+
+    h3 {
+      text-align: center;
+      margin-top: 0;
+      color: #333;
+      font-size: 24px;
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    input {
+      padding: 12px;
+      font-size: 14px;
+      width: 100%;
+      border: 2px solid #e1e1e1;
+      border-radius: 8px;
+      transition: border 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 8px;
+      transition: all 0.3s;
+      font-weight: 600;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .btn-logout {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+      padding: 8px 15px;
+      font-size: 12px;
+    }
+
+    .btn-logout:hover {
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      background: #f8f9fa;
+      padding: 15px;
+      height: 300px;
+      border-radius: 10px;
+      border: 2px solid #e9ecef;
+    }
+
+    .message {
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 12px;
+      word-wrap: break-word;
+      max-width: 80%;
+      animation: messageAppear 0.3s ease-out;
+    }
+
+    @keyframes messageAppear {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-incoming {
+      background: white;
+      border: 1px solid #e9ecef;
+      margin-right: auto;
+    }
+
+    .message-outgoing {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .message-sender {
+      font-weight: bold;
+      font-size: 12px;
+      margin-bottom: 4px;
+      opacity: 0.8;
+    }
+
+    .message-time {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 4px;
+    }
+
+    #status {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-online {
+      color: #28a745;
+    }
+
+    .status-offline {
+      color: #dc3545;
+    }
+
+    .status-connecting {
+      color: #ffc107;
+    }
+
+    .typing-indicator {
+      font-style: italic;
+      color: #666;
+      font-size: 12px;
+      height: 18px;
+    }
+
+    form {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    #input {
+      flex: 1;
+    }
+
+    .auth-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .auth-buttons button {
+      flex: 1;
+    }
+
+    #authStatus {
+      min-height: 20px;
+      text-align: center;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    .success { color: #28a745; }
+    .error { color: #dc3545; }
+    .info { color: #17a2b8; }
+
+    .online-users {
+      background: #f8f9fa;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #666;
+      border: 1px solid #e9ecef;
+    }
+
+    /* Стили для скроллбара */
+    #messages::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #messages::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    #messages::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+
+    #messages::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 🔐 Блок авторизации -->
+  <div id="auth" class="active">
+    <h3>Добро пожаловать! 👋</h3>
+    <input id="email" type="email" placeholder="📧 Ваш email" />
+    <input id="password" type="password" placeholder="🔒 Пароль" />
+    <input id="username" type="text" placeholder="👤 Имя пользователя" />
+    <div class="auth-buttons">
+      <button id="registerBtn">📝 Регистрация</button>
+      <button id="loginBtn">🚀 Войти</button>
+    </div>
+    <div id="authStatus"></div>
+  </div>
+
+  <!-- 💬 Блок чата -->
+  <div id="chat">
+    <div class="chat-header">
+      <div class="user-info">
+        <div class="avatar" id="userAvatar">U</div>
+        <div>
+          <strong id="userName">Пользователь</strong>
+          <div id="status" class="status-connecting">⏳ Подключаемся...</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logoutBtn">🚪 Выйти</button>
+    </div>
+
+    <div class="online-users" id="onlineUsers">
+      👥 Онлайн: 1
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator"></div>
+
+    <div id="messages"></div>
+
+    <form id="form">
+      <input id="input" autocomplete="off" placeholder="💭 Напишите сообщение..." />
+      <button type="submit">📤</button>
+    </form>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+    const CHAT_ID = 1;
+
+    const authBox = document.getElementById('auth');
+    const chatBox = document.getElementById('chat');
+    const emailEl = document.getElementById('email');
+    const passwordEl = document.getElementById('password');
+    const usernameEl = document.getElementById('username');
+    const registerBtn = document.getElementById('registerBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatus = document.getElementById('authStatus');
+    const statusEl = document.getElementById('status');
+    const messagesEl = document.getElementById('messages');
+    const formEl = document.getElementById('form');
+    const inputEl = document.getElementById('input');
+    const userAvatar = document.getElementById('userAvatar');
+    const userName = document.getElementById('userName');
+    const onlineUsers = document.getElementById('onlineUsers');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    let token = null;
+    let userId = null;
+    let username = null;
+    let socket = null;
+    let typingTimer = null;
+    let onlineCount = 1;
+
+    // 🔄 Восстановление сессии при загрузке
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedToken = localStorage.getItem('token');
+      if (savedToken) {
+        token = savedToken;
+        verifyTokenAndConnect();
+      }
+    });
+
+    // ✅ Проверка токена
+    async function verifyTokenAndConnect() {
+      try {
+        const meRes = await fetch(`${API_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!meRes.ok) throw new Error('Токен невалиден');
+
+        const meData = await meRes.json();
+        userId = meData.id || meData.userId;
+        username = meData.username || 'Пользователь';
+
+        if (!userId) throw new Error('Не удалось получить ID пользователя');
+
+        updateUserInfo();
+        authBox.classList.remove('active');
+        chatBox.classList.add('active');
+        connectSocket();
+        loadMessages();
+      } catch (e) {
+        console.error('Ошибка проверки токена:', e);
+        localStorage.removeItem('token');
+        token = null;
+        showAuthStatus('❌ Сессия истекла. Войдите снова.', 'error');
+      }
+    }
+
+    // 👤 Обновление информации о пользователе
+    function updateUserInfo() {
+      userName.textContent = username;
+      userAvatar.textContent = username.charAt(0).toUpperCase();
+      userAvatar.style.background = getRandomGradient();
+    }
+
+    // 🎨 Случайный градиент для аватара
+    function getRandomGradient() {
+      const gradients = [
+        'linear-gradient(135deg, #667eea, #764ba2)',
+        'linear-gradient(135deg, #f093fb, #f5576c)',
+        'linear-gradient(135deg, #4facfe, #00f2fe)',
+        'linear-gradient(135deg, #43e97b, #38f9d7)',
+        'linear-gradient(135deg, #fa709a, #fee140)'
+      ];
+      return gradients[Math.floor(Math.random() * gradients.length)];
+    }
+
+    // 📝 Регистрация
+    registerBtn.addEventListener('click', async () => {
+      const email = emailEl.value.trim();
+      const password = passwordEl.value.trim();
+      const username = usernameEl.value.trim();
+
+      if (!validateAuthInput(email, password, username)) return;
+
+      try {
+        const res = await fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, username }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message);
+        }
+
+        showAuthStatus('✅ Регистрация успешна! Теперь войдите.', 'success');
+        passwordEl.value = '';
+      } catch (e) {
+        showAuthStatus(`❌ Ошибка: ${e.message}`, 'error');
+      }
+    });
+
+    // 🔐 Логин
+    loginBtn.addEventListener('click', async () => {
+      const email = emailEl.value.trim();
+      const password = passwordEl.value.trim();
+
+      if (!validateAuthInput(email, password)) return;
+
+      try {
+        const res = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message);
+        }
+
+        const data = await res.json();
+        token = data.access_token;
+        localStorage.setItem('token', token);
+
+        // Получаем данные пользователя
+        const meRes = await fetch(`${API_URL}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!meRes.ok) throw new Error('Ошибка получения данных пользователя');
+
+        const meData = await meRes.json();
+        userId = meData.id || meData.userId;
+        username = meData.username;
+
+        if (!userId) throw new Error('Не удалось получить ID пользователя');
+
+        updateUserInfo();
+        authBox.classList.remove('active');
+        chatBox.classList.add('active');
+        connectSocket();
+        loadMessages();
+        
+        showAuthStatus('', '');
+      } catch (e) {
+        showAuthStatus(`❌ Ошибка входа: ${e.message}`, 'error');
+      }
+    });
+
+    // 🚪 Выход
+    logoutBtn.addEventListener('click', () => {
+      logout();
+    });
+
+    function logout() {
+      if (socket) {
+        socket.disconnect();
+      }
+      localStorage.removeItem('token');
+      token = null;
+      userId = null;
+      username = null;
+      
+      chatBox.classList.remove('active');
+      authBox.classList.add('active');
+      showAuthStatus('✅ Вы вышли из системы', 'success');
+      
+      // Очищаем поля
+      emailEl.value = '';
+      passwordEl.value = '';
+      usernameEl.value = '';
+    }
+
+    // ✅ Валидация ввода
+    function validateAuthInput(email, password, username = '') {
+      if (!email || !password) {
+        showAuthStatus('❌ Заполните email и пароль', 'error');
+        return false;
+      }
+      if (username && username.length < 2) {
+        showAuthStatus('❌ Имя должно быть не менее 2 символов', 'error');
+        return false;
+      }
+      return true;
+    }
+
+    // 💬 Показать статус авторизации
+    function showAuthStatus(message, type) {
+      authStatus.textContent = message;
+      authStatus.className = type;
+    }
+
+    // 🌐 Подключение к сокету
+    function connectSocket() {
+      if (!token) {
+        showStatus('❌ Ошибка авторизации', 'error');
+        return;
+      }
+
+      socket = io(API_URL, {
+        transports: ['websocket'],
+        auth: { token }
+      });
+
+      socket.on('connect', () => {
+        showStatus(`✅ Подключено`, 'success');
+      });
+
+      socket.on('disconnect', () => {
+        showStatus('❌ Соединение потеряно', 'error');
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('Ошибка подключения WebSocket:', error);
+        showStatus('❌ Ошибка подключения к чату', 'error');
+      });
+
+      // Получение сообщения
+      socket.on('message:receive', (data) => {
+        addMessage(data.text, data.userId === userId, data.username || 'Аноним');
+      });
+
+      // Пользователь печатает
+      socket.on('user:typing', (data) => {
+        if (data.userId !== userId) {
+          showTyping(data.username);
+        }
+      });
+
+      // Пользователь перестал печатать
+      socket.on('user:stop-typing', () => {
+        hideTyping();
+      });
+
+      // Обновление онлайн пользователей
+      socket.on('users:online', (data) => {
+        onlineCount = data.count || 1;
+        updateOnlineUsers();
+      });
+    }
+
+    // ✍️ Отправка статуса "печатает"
+    function handleTyping() {
+      if (!socket) return;
+
+      socket.emit('user:typing', {
+        chatId: CHAT_ID,
+        userId,
+        username
+      });
+
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        socket.emit('user:stop-typing', { chatId: CHAT_ID });
+      }, 1000);
+    }
+
+    // 👀 Показать индикатор печати
+    function showTyping(username) {
+      typingIndicator.textContent = `✍️ ${username} печатает...`;
+    }
+
+    // 🙈 Скрыть индикатор печати
+    function hideTyping() {
+      typingIndicator.textContent = '';
+    }
+
+    // 👥 Обновить список онлайн
+    function updateOnlineUsers() {
+      onlineUsers.textContent = `👥 Онлайн: ${onlineCount}`;
+    }
+
+    // 📊 Показать статус
+    function showStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = type === 'success' ? 'status-online' : 
+                          type === 'error' ? 'status-offline' : 'status-connecting';
+    }
+
+    // 📥 Загрузка истории сообщений
+    async function loadMessages() {
+      try {
+        const res = await fetch(`${API_URL}/chat/${CHAT_ID}/messages`);
+        if (!res.ok) throw new Error('Ошибка загрузки сообщений');
+        
+        const data = await res.json();
+        messagesEl.innerHTML = '';
+        data.forEach(msg => {
+          addMessage(
+            msg.text, 
+            msg.userId === userId, 
+            msg.user?.username || `Пользователь ${msg.userId}`
+          );
+        });
+      } catch (e) {
+        console.error('Ошибка загрузки сообщений:', e);
+      }
+    }
+
+    // ✉️ Отправка сообщения
+    formEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = inputEl.value.trim();
+      
+      if (text === '') return;
+      
+      if (!userId) {
+        alert('❌ Ошибка авторизации. Перезайдите в чат.');
+        return;
+      }
+
+      if (!socket || !socket.connected) {
+        alert('❌ Нет подключения к чату. Попробуйте переподключиться.');
+        return;
+      }
+
+      socket.emit('message:send', {
+        chatId: CHAT_ID,
+        userId: userId,
+        text: text
+      });
+
+      inputEl.value = '';
+      hideTyping();
+    });
+
+    // ⌨️ Событие печати
+    inputEl.addEventListener('input', handleTyping);
+
+    // 💬 Добавить сообщение в чат
+    function addMessage(text, isMine = false, sender = 'Вы') {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${isMine ? 'message-outgoing' : 'message-incoming'}`;
+      
+      const senderDiv = document.createElement('div');
+      senderDiv.className = 'message-sender';
+      senderDiv.textContent = isMine ? 'Вы' : sender;
+      
+      const textDiv = document.createElement('div');
+      textDiv.className = 'message-text';
+      textDiv.textContent = text;
+      
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'message-time';
+      timeDiv.textContent = new Date().toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      messageDiv.appendChild(senderDiv);
+      messageDiv.appendChild(textDiv);
+      messageDiv.appendChild(timeDiv);
+      
+      messagesEl.appendChild(messageDiv);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // ⌨️ Горячие клавиши
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Enter для отправки
+      if (e.ctrlKey && e.key === 'Enter') {
+        formEl.dispatchEvent(new Event('submit'));
+      }
+      // Ctrl+L для выхода
+      if (e.ctrlKey && e.key === 'l') {
+        logout();
+      }
+      // Фокус на поле ввода при любом нажатии в чате
+      if (chatBox.classList.contains('active') && e.target !== inputEl) {
+        inputEl.focus();
+      }
+    });
+  </script>
+</body>
+</html>
